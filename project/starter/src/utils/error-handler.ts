@@ -44,21 +44,21 @@ export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
 /**
  * Retry utility with exponential backoff
  *
- * This function implements the retry pattern with exponential backoff and jitter.
+ * This function retries a failed async operation.
+ * Each retry waits longer than the previous attempt.
  *
- * Algorithm:
- * 1. Try to execute the function
- * 2. If it succeeds, return the result
- * 3. If it fails and retries remain:
- *    - Calculate backoff delay: delayMs * 2^(attempt - 1)
- *    - Add jitter (random 0-100ms) to prevent thundering herd
- *    - Wait for the calculated duration
- *    - Retry
- * 4. If all retries exhausted, throw ReviewError with RETRY_EXHAUSTED code
+ * Example:
+ * Attempt 1 -> immediate
+ * Attempt 2 -> wait 1000ms
+ * Attempt 3 -> wait 2000ms
+ * Attempt 4 -> wait 4000ms
+ *
+ * A small random jitter is added to prevent multiple
+ * requests from retrying at exactly the same time.
  *
  * @param fn - Async function to retry
- * @param maxRetries - Maximum number of retries (default: 3)
- * @param delayMs - Base delay in milliseconds (default: 1000)
+ * @param maxRetries - Maximum number of retries
+ * @param delayMs - Base delay in milliseconds
  * @returns The result of the successful function execution
  * @throws ReviewError with RETRY_EXHAUSTED code if all retries fail
  */
@@ -67,16 +67,49 @@ export async function withRetry<T>(
   maxRetries: number = 3,
   delayMs: number = 1000
 ): Promise<T> {
-  // TODO: Implement retry logic with exponential backoff
-  // Hints:
-  // - Use a for loop from 1 to maxRetries
-  // - Use try/catch to catch errors
-  // - Calculate backoff: delayMs * Math.pow(2, attempt - 1)
-  // - Add jitter: Math.random() * 100
-  // - Use setTimeout wrapped in Promise for delay
-  // - Throw ReviewError with ErrorCodes.RETRY_EXHAUSTED if all retries fail
+  let lastError: unknown;
 
-  throw new Error('Not implemented');
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      // Try to execute the operation
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      // If there are no retries remaining, stop retrying
+      if (attempt > maxRetries) {
+        break;
+      }
+
+      // Exponential backoff:
+      // attempt 1 -> delayMs
+      // attempt 2 -> delayMs * 2
+      // attempt 3 -> delayMs * 4
+      const backoff = delayMs * Math.pow(2, attempt - 1);
+
+      // Add random jitter between 0 and 100ms
+      const jitter = Math.random() * 100;
+
+      const waitTime = backoff + jitter;
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, waitTime);
+      });
+    }
+  }
+
+  // All attempts failed
+  throw new ReviewError(
+    'Operation failed after all retry attempts',
+    ErrorCodes.RETRY_EXHAUSTED,
+    {
+      maxRetries,
+      lastError:
+        lastError instanceof Error
+          ? lastError.message
+          : String(lastError)
+    }
+  );
 }
 
 /**
@@ -96,14 +129,25 @@ export async function withTimeout<T>(
   timeoutMs: number,
   errorMessage: string = 'Operation timed out'
 ): Promise<T> {
-  // TODO: Implement timeout wrapper using Promise.race
-  // Hints:
-  // - Use Promise.race to race fn() against a timeout promise
-  // - The timeout promise should reject after timeoutMs milliseconds
-  // - Throw ReviewError with ErrorCodes.AGENT_TIMEOUT on timeout
-  // - Include timeoutMs in metadata
+  return Promise.race([
+    // Run the actual operation
+    fn(),
 
-  throw new Error('Not implemented');
+    // Timeout promise
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new ReviewError(
+            errorMessage,
+            ErrorCodes.AGENT_TIMEOUT,
+            {
+              timeoutMs
+            }
+          )
+        );
+      }, timeoutMs);
+    })
+  ]);
 }
 
 /**
@@ -120,8 +164,10 @@ export function formatError(error: unknown): string {
   if (isReviewError(error)) {
     return `[${error.code}] ${error.message}`;
   }
+
   if (error instanceof Error) {
     return error.message;
   }
+
   return String(error);
 }
