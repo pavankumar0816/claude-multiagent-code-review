@@ -111,25 +111,25 @@ async function main() {
     await fs.mkdir('reports', { recursive: true });
 
     // Save Markdown report
-    await fs.writeFile(
-      `reports/pr-${owner}-${repo}-${prNumber}.md`,
-      markdown,
-      'utf-8'
-    );
+await fs.writeFile(
+  `reports/${owner}_${repo}_${prNumber}.md`,
+  markdown,
+  'utf-8'
+);
 
-    // Save HTML report
-    await fs.writeFile(
-      `reports/pr-${owner}-${repo}-${prNumber}.html`,
-      html,
-      'utf-8'
-    );
+// Save HTML report
+await fs.writeFile(
+  `reports/${owner}_${repo}_${prNumber}.html`,
+  html,
+  'utf-8'
+);
 
-    // Save JSON report
-    await fs.writeFile(
-      `reports/pr-${owner}-${repo}-${prNumber}.json`,
-      json,
-      'utf-8'
-    );
+// Save JSON report
+await fs.writeFile(
+  `reports/${owner}_${repo}_${prNumber}.json`,
+  json,
+  'utf-8'
+);
 
     const duration = Date.now() - startTime;
 
@@ -139,14 +139,14 @@ async function main() {
     console.log('');
     console.log('📄 Reports generated:');
     console.log(
-      `   Markdown: reports/pr-${owner}-${repo}-${prNumber}.md`
-    );
-    console.log(
-      `   HTML:     reports/pr-${owner}-${repo}-${prNumber}.html`
-    );
-    console.log(
-      `   JSON:     reports/pr-${owner}-${repo}-${prNumber}.json`
-    );
+  `   Markdown: reports/${owner}_${repo}_${prNumber}.md`
+);
+console.log(
+  `   HTML:     reports/${owner}_${repo}_${prNumber}.html`
+);
+console.log(
+  `   JSON:     reports/${owner}_${repo}_${prNumber}.json`
+);
   } catch (error) {
     console.error('');
     console.error('❌ Error during code review:');
